@@ -1,4 +1,1 @@
 .env
-.envrc
-*.nix
-flake.lock
