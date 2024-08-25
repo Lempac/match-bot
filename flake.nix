@@ -17,7 +17,6 @@
               py.discordpy
               py.python-dotenv
             ]))
-            pkgs.pyright
         ];
     };
   };
