@@ -200,8 +200,8 @@ async def setup(interaction: Interaction, options: Optional[str]):
 async def register(interaction: Interaction, name: str):
     await interaction.response.send_message("Work in progress...")
 
-@client.tree.command(description="Show player status...")
-async def status(interaction: Interaction):
+@client.tree.command(description="Show player stats...")
+async def stats(interaction: Interaction):
     await interaction.response.send_message("Work in progress...")
 
 # To make an argument optional, you can either give it a supported default argument
