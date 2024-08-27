@@ -17,6 +17,7 @@
               py.discordpy
               py.python-dotenv
             ]))
+            pkgs.sqlite
         ];
     };
   };
