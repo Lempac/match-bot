@@ -1,5 +1,3 @@
-from ast import In
-from enum import member
 import os
 import random
 import sqlite3
@@ -11,6 +9,7 @@ from discord.ui.view import View
 from discord import (
     AppCommandType,
     Attachment,
+    Client,
     ClientUser,
     Color,
     Embed,
@@ -36,8 +35,7 @@ load_dotenv()
 con = sqlite3.connect("db.sqlite")
 cur = con.cursor()
 # cur.executescript(
-#     """
-#     DROP TABLE IF EXISTS teams;
+# """
 #     DROP TABLE IF EXISTS games;
 # """
 # )
@@ -76,7 +74,7 @@ async def changeNick(member: Member, name: str) -> bool:
 
 
 def setElo(id: int, amount: int) -> None:
-    cur.execute(f"UPDATE users SET elo = {amount} WHERE id = {id}")
+    cur.execute(f"UPDATE users SET elo = MIN{amount} WHERE id = {id}")
     cur.connection.commit()
 
 
@@ -91,6 +89,52 @@ def isIngame(id: int) -> int:
         f"SELECT games.id FROM users JOIN teams ON teams.player = users.id JOIN games ON games.id = teams.game WHERE state = 'playing' AND users.id = {id}"
     ).fetchone()
     return -1 if data == None else data[0]
+
+
+async def removePlayers(interaction: Interaction, game: int):
+    players: list[tuple[int]] = cur.execute(
+        f"SELECT player FROM games JOIN teams ON teams.game = games.id WHERE teams.game = {game}"
+    ).fetchall()
+    if type(interaction.guild) is Guild:
+        for player in players:
+            insPlayer = interaction.guild.get_member(player[0])
+            if type(insPlayer) is Member:
+                await insPlayer.move_to(None)
+
+
+async def rewardPlayers(interaction: Interaction, game: int, won: int):
+    wonPlayers: list[tuple[int]] = cur.execute(
+        f"SELECT player FROM games JOIN teams ON teams.game = games.id WHERE teams.game = {game} AND teams.id = {won}"
+    ).fetchall()
+    losePlayers: list[tuple[int]] = cur.execute(
+        f"SELECT player FROM games JOIN teams ON teams.game = games.id WHERE teams.game = {game} AND teams.id = {2 if won == 1 else 1}"
+    ).fetchall()
+    constRewardElo = int(os.getenv("points_per_game") or 25)
+    if type(interaction.guild) is Guild:
+        for player in wonPlayers:
+            insPlayer = interaction.guild.get_member(player[0])
+            if type(insPlayer) is Member:
+                changeElo(
+                    player[0],
+                    constRewardElo * 2 if insPlayer.premium_since else constRewardElo,
+                )
+                data: tuple[str, int] = cur.execute(
+                    f"SELECT name, elo FROM users WHERE id = {player[0]}"
+                ).fetchone()
+                await changeNick(insPlayer, f"[ {data[1]} ] {data[0]}")
+        for player in losePlayers:
+            currentElo = cur.execute(
+                f"SELECT elo FROM users WHERE id = {player[0]}"
+            ).fetchone()
+            insPlayer = interaction.guild.get_member(player[0])
+            if type(insPlayer) is Member:
+                changeElo(
+                    player[0], 0 if constRewardElo > currentElo else -constRewardElo
+                )
+                data: tuple[str, int] = cur.execute(
+                    f"SELECT name, elo FROM users WHERE id = {player[0]}"
+                ).fetchone()
+                await changeNick(insPlayer, f"[ {data[1]} ] {data[0]}")
 
 
 MY_GUILD = discord.Object(
@@ -134,18 +178,17 @@ class UserMenu(View):
         super().__init__(timeout=timeout)
 
     @discord.ui.select(
+        # default_values=
         cls=discord.ui.UserSelect,
         placeholder="Select a player",
         min_values=1,
         max_values=1,
     )
     async def user_select(
-        self, interaction: discord.Interaction, select: discord.ui.UserSelect
+        self, interaction: Interaction, select: discord.ui.UserSelect
     ) -> None:
-        await interaction.response.defer()
-        await interaction.followup.send(
-            f"You selected {select.values[0]}", ephemeral=True
-        )
+        await interaction.delete_original_response()
+        # select.
 
 
 @client.event
@@ -157,12 +200,23 @@ async def on_voice_state_update(
         and before.channel.name.startswith("game#")
         and len(before.channel.members) == 0
     ):
+        cur.execute(
+            f"UPDATE games SET state = 'voided' WHERE id = {before.channel.name.split('#')[-1]} AND state = 'playing'"
+        )
         await before.channel.delete()
+
+    if (
+        after.channel is not None
+        and after.channel.name.startswith("game#")
+        and isIngame(member.id) != after.channel.name.split("#")[-1]
+    ):
+        await member.move_to(before.channel)
 
     if (
         after.channel is None
         or before.channel == after.channel
-        or before.channel is not None and len(before.channel.members) >= len(after.channel.members)
+        or before.channel is not None
+        and len(before.channel.members) >= len(after.channel.members)
         or not after.channel.id in listAllChannels("lobby")
     ):
         return
@@ -185,10 +239,11 @@ async def on_voice_state_update(
         f"INSERT INTO teams(id, game, player) VALUES (2, {currentGameNumber}, {lead2.id})"
     )
     cur.connection.commit()
-    vc = await member.guild.create_voice_channel(f"game#{currentGameNumber}")
-    for player in players:
-        await player.move_to(vc)
-    await vc.send("", view=UserMenu())
+    vc1 = await member.guild.create_voice_channel(f"game#team1#{currentGameNumber}")
+    vc2 = await member.guild.create_voice_channel(f"game#team2#{currentGameNumber}")
+    await lead1.move_to(vc1)
+    await lead2.move_to(vc2)
+    await random.choice([vc1, vc2]).send("Select a team mate:", view=UserMenu())
 
 
 @client.tree.command(description="Voids your current game...")
@@ -198,20 +253,14 @@ async def void(interaction: Interaction):
     if game != -1:
         await interaction.response.defer()
         cur.execute("UPDATE games SET state = 'voided'")
-        players: list[tuple[int]] = cur.execute(
-            f"SELECT player FROM games JOIN teams ON teams.game = games.id WHERE teams.game = {game}"
-        ).fetchall()
-        if type(interaction.guild) is Guild:
-            for player in players:
-                insPlayer = interaction.guild.get_member(player[0])
-                if type(insPlayer) is Member:
-                    await insPlayer.move_to(None)
-            cur.connection.commit()
-            if type(interaction.channel) is TextChannel or type(interaction.channel) is VoiceChannel:
-                if interaction.guild.get_channel(interaction.channel.id) is not None:
-                    await interaction.followup.send("Done...")
-        else:
-            await interaction.followup.send("How?")
+        await removePlayers(interaction, game)
+        cur.connection.commit()
+        if type(interaction.guild) is Guild and (
+            type(interaction.channel) is TextChannel
+            or type(interaction.channel) is VoiceChannel
+        ):
+            if interaction.guild.get_channel(interaction.channel.id) is not None:
+                await interaction.followup.send("Done...")
     else:
         await interaction.response.send_message("No game to void right now...")
 
@@ -224,17 +273,28 @@ async def score(interaction: Interaction, gamescreenshot: Attachment) -> None:
         await interaction.response.send_message(
             "Unknown image type: " + str(gamescreenshot.content_type)
         )
-    await interaction.response.send_message("Work in progress...")
-
-
-# @client.tree.command(description="Start a vote to make new game...")
-# @app_commands.guild_only
-# async def redo(interaction: Interaction) -> None:
-#     game = isIngame(interaction.user.id)
-#     if game != -1:
-#         await interaction.response.send_message("Work in progress...")
-#     else:
-#         await interaction.response.send_message("No game to redo right now...")
+    game = isIngame(interaction.user.id)
+    if game == -1:
+        return await interaction.response.send_message("You're not in a game...")
+    data: tuple[int, int] = cur.execute(
+        f"SELECT teamleader1, teamleader2 FROM games WHERE games.id = {game}"
+    ).fetchone()
+    if data[0] == interaction.user.id:
+        cur.execute(
+            f"UPDATE games SET state = 'finished', won = 1, score = {gamescreenshot.url} WHERE id = {game}"
+        )
+        await removePlayers(interaction, game)
+        await rewardPlayers(interaction, game, 1)
+        cur.connection.commit()
+    elif data[1] == interaction.user.id:
+        cur.execute(
+            f"UPDATE games SET state = 'finished', won = 2, score = {gamescreenshot.url} WHERE id = {game}"
+        )
+        await removePlayers(interaction, game)
+        await rewardPlayers(interaction, game, 2)
+        cur.connection.commit()
+    else:
+        await interaction.response.send_message("Your not a team leader...")
 
 
 @client.tree.command(description="Add or remove elo...")
@@ -272,7 +332,7 @@ async def elo(
     (
         await interaction.followup.send("Done...")
         if await changeNick(member, f"[ {data[1]} ] {data[0]}")
-        else await interaction.response.send_message(
+        else await interaction.followup.send(
             "Done...but your to cool for nickname change..."
         )
     )
@@ -351,7 +411,6 @@ async def register(interaction: Interaction, name: str) -> None:
     )
     if type(interaction.user) is Member:
         cur.connection.commit()
-
         (
             await interaction.followup.send("Done...")
             if await changeNick(interaction.user, f"[ 0 ] {name}")
@@ -378,36 +437,88 @@ async def register_error(
 @client.tree.command(description="Show player stats...")
 @app_commands.describe(member="Person that registered...")
 @app_commands.check(
-    lambda x: cur.execute(f"SELECT id FROM users WHERE id = {x.user.id}") != ()
+    lambda x: cur.execute(f"SELECT id FROM users WHERE id = {x.user.id}") != None
 )
-@app_commands.guild_only
-async def stats(interaction: Interaction, member: Optional[Member]) -> None:
-    # if member is None and type(interaction.user) is Member:
-    #     member = interaction.user
-    #     data = cur.execute(
-    #         f"SELECT name, elo, count(players) AS played, count(won) AS wins, COUNT(players) - COUNT(won) AS losses FROM users JOIN games ON users.id = games.players WHERE id = {member.id}"
-    #     ).fetchone()
-    #     await interaction.response.send_message(data)
-    # embed = Embed()
-    # embed.description = f"- {data[1]}\n- {data[2]} \n- ɢᴀᴍᴇꜱ ᴘʟᴀʏᴇᴅ \n- ᴡɪɴꜱ\n- ʟᴏꜱꜱᴇꜱ"
-    # embed.set_author(name="STATS")
-    # embed.color = Color(0x00bfff)
-    # await interaction.followup.send(embed=embed)
-    await interaction.response.send_message("Work in progress...")
+async def stats(interaction: Interaction, member: Optional[User]) -> None:
+    data: tuple[str, int, int, int, int] = cur.execute(
+        f"SELECT users.name, users.elo, COUNT(games.id) AS played, COUNT(won) AS wins, COUNT(games.id) - COUNT(won) AS losses FROM users JOIN teams ON teams.player = users.id LEFT JOIN games ON games.id = teams.game AND games.state != 'voided' WHERE users.id = {(member or interaction.user).id}"
+    ).fetchone()
+    embed = Embed()
+    embed.add_field(name="Name", value=data[0])
+    embed.add_field(name="Elo", value=data[1])
+    embed.add_field(name="Played", value=data[2])
+    embed.add_field(name="Wons", value=data[3])
+    embed.add_field(name="Losses", value=data[4])
+    embed.set_author(name="STATS")
+    embed.color = Color(0x00BFFF)
+    embed.set_thumbnail(url=interaction.user.display_avatar.url)
+    await interaction.response.send_message(embed=embed)
 
 
 @client.tree.command(description="Show leaderboard...")
 async def leaderboard(interaction: Interaction) -> None:
-    # data: list[tuple[str, int, int, int, int]] = cur.execute(
-    #     "SELECT name, elo, played, won, lost FROM users JOIN teams ON teams.player = users.id JOIN games ON games.id = teams.game"
-    # ).fetchmany(5)
+    data: list[tuple[int, int, int, int, int]] = cur.execute(
+        "SELECT users.id, elo, COUNT(games.id) AS played, COUNT(won) AS wins, COUNT(games.id) - COUNT(won) AS losses FROM users JOIN teams ON teams.player = users.id LEFT JOIN games ON games.id = teams.game AND games.state != 'voided' GROUP BY users.id ORDER BY elo DESC, wins DESC, losses"
+    ).fetchmany(5)
 
-    # embed = Embed()
-    # embed.title = "Top 5 players:"
-    # for player in data:
-    #     for field in player:
-    #         embed.add_field(name=)
-    await interaction.response.send_message("Work in progress...")
+    embed = Embed()
+    embed.title = "**Top 5 players:**"
+    embed.description = "**―――――――――――――――――**\n"
+    for i, player in enumerate(data):
+        user = client.get_user(player[0])
+        embed.description += (
+            f"**{i+1}**.{ user.mention if type(user) is User else player[0]}\n"
+        )
+        embed.description += f"`Elo: {player[1]}`\n"
+        embed.description += f"`Wins: {player[3]}`\n"
+        embed.description += "**―――――――――――――――――**\n"
+        # embed.add_field(name="Name", value=player[0])
+        # embed.add_field(name="Elo", value=player[1])
+        # embed.add_field(name="Played", value=player[2])
+        # embed.add_field(name="Wins", value=player[3])
+        # embed.add_field(name="Losses", value=player[4])
+    embed.color = Color(0x00BFFF)
+    await interaction.response.send_message(embed=embed)
+
+
+class RegisterOnly(app_commands.CheckFailure):
+    @staticmethod
+    def RegisterOnly():
+        def pre(interaction: Interaction):
+            if (
+                cur.execute(
+                    f"SELECT id FROM users WHERE id = {interaction.user.id}"
+                ).fetchone()
+                == None
+            ):
+                raise RegisterOnly()
+            return True
+
+        return app_commands.check(pre)
+
+
+@client.tree.command(description="Rename your self...")
+@app_commands.guild_only
+@app_commands.describe(name="New nickname...")
+@RegisterOnly.RegisterOnly()
+async def rename(interaction: Interaction, name: str):
+    data: tuple[int] = cur.execute(
+        f"SELECT elo FROM users WHERE id = {interaction.user.id}"
+    ).fetchone()
+    if type(interaction.user) is Member and await changeNick(
+        interaction.user, f"[ {data[0]} ] " + name
+    ):
+        cur.execute(f"UPDATE users SET name = {name} WHERE id = {interaction.user.id}")
+        cur.connection.commit()
+        await interaction.response.send_message("Done...")
+    else:
+        return await interaction.response.send_message("Only in guild, so how?")
+
+
+@rename.error
+async def rename_error(interaction: Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, RegisterOnly):
+        return await interaction.response.send_message("Your not registered...")
 
 
 if __name__ == "__main__":

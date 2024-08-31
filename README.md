@@ -3,7 +3,7 @@
 ## Current status:
 
 - [x] Database
-- [ ] Commands
+- [x] Commands
 - [ ] Game logic
 
 ### Commands:
@@ -15,15 +15,20 @@
     - [x] give
     - [x] remove
     - [x] set
-<!-- - [ ] redo - redo game -->
+<!-- - [ ] redo - redo game <- No point -->
 - [x] void - void game
-- [ ] score - submit game
-- [ ] stats
-- [ ] rename
-- [ ] leaderboard
+- [x] score - submit game
+- [x] stats
+- [x] rename
+- [x] leaderboard
 
 ### Game logic:
 - [x] Start game
 - [ ] Game state
-- [ ] Giving rewards
-- [ ] Extra rewards
+- [x] Giving rewards
+- [x] Extra rewards
+  
+### V2:
+- [ ] Swap people
+- [ ] Show result in channel
+- [ ] Refactor

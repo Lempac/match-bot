@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS
     games (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         state TEXT CHECK (state IN ('playing', 'voided', 'finished')) NOT NULL DEFAULT 'playing',
-        won TEXT CHECK (won IN ('team1', 'team2')),
-        score BLOB,
+        won INT CHECK (won IN (1, 2)),
+        score TEXT,
         teamleader1 REFERENCES users (id),
         teamleader2 REFERENCES users (id)
     );
