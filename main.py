@@ -1,7 +1,8 @@
+from enum import member
 import os
 import random
 import sqlite3
-from typing import Literal, Optional
+from typing import ItemsView, Literal, Optional
 import discord
 from discord.ext import commands
 import discord.ext.commands
@@ -13,11 +14,15 @@ from discord import (
     ClientUser,
     Color,
     Embed,
+    Game,
     Guild,
     Intents,
     Interaction,
     Member,
     Permissions,
+    Role,
+    SelectMenu,
+    StageChannel,
     TextChannel,
     User,
     VoiceChannel,
@@ -74,7 +79,7 @@ async def changeNick(member: Member, name: str) -> bool:
 
 
 def setElo(id: int, amount: int) -> None:
-    cur.execute(f"UPDATE users SET elo = MIN{amount} WHERE id = {id}")
+    cur.execute(f"UPDATE users SET elo = {amount} WHERE id = {id}")
     cur.connection.commit()
 
 
@@ -169,16 +174,32 @@ client = MyClient(intents=Intents(Intents.default().value | Intents.members.flag
 @client.event
 async def on_ready() -> None:
     if type(client.user) is ClientUser:
+        await client.change_presence(status=discord.Status.online, activity=Game("Thinking..."))
+        if client.application is None:
+            return
+        await client.application.edit(description="Valorant match making bot...(Alpha)")
         print(f"Logged in as {client.user} (ID: {client.user.id})")
     print("------")
 
 
 class UserMenu(View):
-    def __init__(self, *, timeout: float | None = 180):
+    def __init__(
+        self,
+        vc1: VoiceChannel,
+        vc2: VoiceChannel,
+        lobby: VoiceChannel,
+        game: int,
+        timeout: float | None = 180,
+    ):
         super().__init__(timeout=timeout)
+        self.count = 2
+        self.vc1 = vc1
+        self.vc2 = vc2
+        self.lobby = lobby
+        self.game = game
+        self.user_select.default_values = self.lobby.members
 
     @discord.ui.select(
-        # default_values=
         cls=discord.ui.UserSelect,
         placeholder="Select a player",
         min_values=1,
@@ -187,14 +208,43 @@ class UserMenu(View):
     async def user_select(
         self, interaction: Interaction, select: discord.ui.UserSelect
     ) -> None:
+        if interaction.guild is None:
+            return
+        
+        if self.count == int(os.getenv("max_player") or 10):
+            return await interaction.delete_original_response()
         await interaction.delete_original_response()
-        # select.
+        self.count += 1
+        userMember = interaction.guild.get_member(select.values[0].id)
+        if userMember is None:
+            return
+        if interaction.channel is self.vc1:
+            cur.execute(
+                f"INSERT INTO teams(id, game, player) VALUES (1, {self.game}, {userMember.id})"
+            )
+            cur.connection.commit()
+            await userMember.move_to(self.vc1)
+        elif interaction.channel is self.vc2:
+            cur.execute(
+                f"INSERT INTO teams(id, game, player) VALUES (2, {self.game}, {userMember.id})"
+            )
+            cur.connection.commit()
+            await userMember.move_to(self.vc2)
+        
+        select.default_values = self.lobby.members
+        
+        if interaction.channel is self.vc1:
+            await self.vc2.send("Select a team mate:", view=self)
+        elif interaction.channel is self.vc2:
+            await self.vc1.send("Select a team mate:", view=self)
 
 
 @client.event
 async def on_voice_state_update(
     member: Member, before: VoiceState, after: VoiceState
 ) -> None:
+    if type(after.channel) is StageChannel:
+        return
     if (
         before.channel is not None
         and before.channel.name.startswith("game#")
@@ -243,7 +293,10 @@ async def on_voice_state_update(
     vc2 = await member.guild.create_voice_channel(f"game#team2#{currentGameNumber}")
     await lead1.move_to(vc1)
     await lead2.move_to(vc2)
-    await random.choice([vc1, vc2]).send("Select a team mate:", view=UserMenu())
+    if type(after.channel) is VoiceChannel:
+        await random.choice([vc1, vc2]).send(
+            "Select a team mate:", view=UserMenu(vc1, vc2, after.channel, currentGameNumber)
+        )
 
 
 @client.tree.command(description="Voids your current game...")
@@ -353,7 +406,17 @@ async def setup(interaction: Interaction, options: Optional[str]) -> None:
 
     if options == "addlobby":
         await addLobby(interaction.guild)
-
+    if (
+        cur.execute(
+            f"SELECT id FROM registerRole WHERE guild = {interaction.guild_id}"
+        ).fetchone()
+        is None
+    ):
+        role = await interaction.guild.create_role(name="Registered")
+        cur.execute(
+            f"INSERT INTO registerRole VALUES ({role.id}, {interaction.guild_id})"
+        )
+        cur.connection.commit()
     if options is None and not len(
         set([x.id for x in interaction.guild.text_channels])
         & set(listAllChannels("register"))
@@ -364,6 +427,7 @@ async def setup(interaction: Interaction, options: Optional[str]) -> None:
             INSERT INTO channels(id, type) VALUES ({regchannel.id}, 'register')
             """
         )
+        cur.connection.commit()
     if options is None and not len(
         set([x.id for x in interaction.guild.voice_channels])
         & set(listAllChannels("lobby"))
@@ -409,8 +473,8 @@ async def register(interaction: Interaction, name: str) -> None:
     cur.execute(
         f"INSERT INTO users(id, name, elo) VALUES ({interaction.user.id}, '{name}', 0)"
     )
-    if type(interaction.user) is Member:
-        cur.connection.commit()
+    cur.connection.commit()
+    if type(interaction.user) is Member and type(interaction.guild) is Guild:
         (
             await interaction.followup.send("Done...")
             if await changeNick(interaction.user, f"[ 0 ] {name}")
@@ -418,6 +482,12 @@ async def register(interaction: Interaction, name: str) -> None:
                 "Done...but your to cool for nickname change..."
             )
         )
+        regRole: int = cur.execute(
+            f"SELECT id FROM registerRole WHERE guild = {interaction.guild_id}"
+        ).fetchone()[0]
+        role = interaction.guild.get_role(regRole)
+        if role is not None:
+            await interaction.user.add_roles(role)
 
 
 @register.error
@@ -429,6 +499,17 @@ async def register_error(
             "Only in register channel...", ephemeral=True
         )
     if isinstance(error, IsAllreadyRegistered):
+        regRole: int = cur.execute(
+            f"SELECT id FROM registerRole WHERE guild = {interaction.guild_id}"
+        ).fetchone()[0]
+        if (
+            type(interaction.user) is Member
+            and type(interaction.guild) is Guild
+            and not interaction.user.get_role(regRole)
+        ):
+            role = interaction.guild.get_role(regRole)
+            if role is not None:
+                await interaction.user.add_roles(role)
         return await interaction.response.send_message(
             "You are all ready registered..."
         )
@@ -451,7 +532,7 @@ async def stats(interaction: Interaction, member: Optional[User]) -> None:
     embed.add_field(name="Losses", value=data[4])
     embed.set_author(name="STATS")
     embed.color = Color(0x00BFFF)
-    embed.set_thumbnail(url=interaction.user.display_avatar.url)
+    embed.set_thumbnail(url=(member or interaction.user).display_avatar.url)
     await interaction.response.send_message(embed=embed)
 
 

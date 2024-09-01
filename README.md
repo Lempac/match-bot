@@ -4,12 +4,12 @@
 
 - [x] Database
 - [x] Commands
-- [ ] Game logic
+- [x] Game logic
 
 ### Commands:
 - [x] setup - setup server for bot use
     - [x] addlobby - add more lobbies to server
-    - [ ] register role generation
+    - [x] register role generation
 - [x] register - register user for games
 - [x] elo - admin command for currency 
     - [x] give
@@ -24,7 +24,7 @@
 
 ### Game logic:
 - [x] Start game
-- [ ] Game state
+- [x] Game state
 - [x] Giving rewards
 - [x] Extra rewards
   
