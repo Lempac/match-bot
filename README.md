@@ -1,4 +1,6 @@
-# **match-bot**
+# match-bot
+
+# Under development do not use
 
 ## Current status:
 
@@ -32,3 +34,5 @@
 - [ ] Swap people
 - [ ] Show result in channel
 - [ ] Refactor
+- [ ] Ranks
+- [ ] Move to bot
