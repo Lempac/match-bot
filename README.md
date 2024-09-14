@@ -35,4 +35,4 @@
 - [ ] Show result in channel
 - [ ] Refactor
 - [ ] Ranks
-- [ ] Move to bot
+- [x] Move to bot

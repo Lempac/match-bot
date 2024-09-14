@@ -17,7 +17,7 @@ CREATE TABLE
         id INTEGER,
         game INTEGER,
         player REFERENCES users (id),
-        PRIMARY KEY (id, game)
+        PRIMARY KEY (id, game, player)
     );
 
 CREATE TABLE
