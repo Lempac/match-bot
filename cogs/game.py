@@ -230,12 +230,14 @@ class Game(commands.Cog):
 
     @app_commands.command(description="Select player...")
     @app_commands.guild_only
-    async def pick(self, interaction: Interaction, player : Member):
+    async def pick(self, interaction: Interaction, player: Member):
         user = interaction.user
         gameID = isIngame(user.id)
         if gameID == -1:
             return await interaction.response.send_message("Your not ingame...", ephemeral=True)
         teamlead1, teamlead2 = cast(tuple[int, int], cur.execute("SELECT teamleader1, teamleader2").fetchone())
+        if player == teamlead1 or player == teamlead2:
+            return await interaction.response.send_message("This person is all ready a team leader...")
         players : list[tuple[int, int]] = cur.execute(f"SELECT id, player FROM teams WHERE game = {gameID}").fetchall()
         if len(players) == cur.execute("SELECT max_player FROM config").fetchone()[0] * 2:
             return await interaction.response.send_message("Game all ready has max players...", ephemeral=True)

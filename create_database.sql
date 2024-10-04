@@ -2,6 +2,7 @@
 
 CREATE TABLE
     IF NOT EXISTS config (
+        id INTEGER PRIMARY KEY,
         max_player INT DEFAULT 10,
         points_per_game INT DEFAULT 25
     );

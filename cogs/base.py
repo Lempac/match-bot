@@ -169,13 +169,13 @@ class Base(commands.Cog):
 
     @setupGroup.command()
     async def setmaxplayers(self, interaction: Interaction, amount: int):
-        cur.execute(f"UPDATE config SET max_player = ({amount})")
+        cur.execute(f"REPLACE INTO config(id, max_player) VALUES (0, {amount})")
         cur.connection.commit()
         await interaction.response.send_message("Done...")
 
     @setupGroup.command()
     async def setpointspergame(self, interaction: Interaction, amount: int):
-        cur.execute(f"UPDATE config SET points_per_game = ({amount})")
+        cur.execute(f"REPLACE INTO config(id, points_per_game) VALUES (0, {amount})")
         cur.connection.commit()
         await interaction.response.send_message("Done...")
 
@@ -265,6 +265,9 @@ class Base(commands.Cog):
             regRole: int = cur.execute(
                 f"SELECT id FROM registerRole WHERE guild = {interaction.guild_id}"
             ).fetchone()[0]
+            data: tuple[str, int] = cur.execute(
+            f"SELECT name, elo FROM users WHERE id = {interaction.user.id}"
+            ).fetchone()
             if (
                 type(interaction.user) is Member
                 and type(interaction.guild) is Guild
@@ -273,7 +276,12 @@ class Base(commands.Cog):
                 role = interaction.guild.get_role(regRole)
                 if role is not None:
                     await interaction.user.add_roles(role)
-            return await interaction.response.send_message(
+            if await changeNick(interaction.user, f"[ {data[1]} ] {data[0]}"):
+                await interaction.response.send_message("Done...")
+            else: await interaction.response.send_message(
+                "Done...but your to cool for nickname change..."
+            )
+            return await interaction.followup.send(
                 "You are all ready registered..."
             )
 

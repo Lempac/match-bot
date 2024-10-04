@@ -32,8 +32,7 @@ con = sqlite3.connect("db.sqlite")
 cur = con.cursor()
 # cur.executescript(
 # """
-#     DROP TABLE IF EXISTS games;
-#     DROP TABLE IF EXISTS teams;
+#     DROP TABLE IF EXISTS config;
 # """
 # )
 
@@ -43,6 +42,7 @@ with open("create_database.sql", "r") as sql_file:
 
 cur.executescript(sql_script)
 
+print(cur.execute("SELECT max_player FROM config").fetchone()[0])
 
 def listAllChannels(type: Literal["lobby", "register"]) -> list[int]:
     return [
