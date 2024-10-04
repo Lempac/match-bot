@@ -175,19 +175,31 @@ class Game(commands.Cog):
             )
             cur.connection.commit()
             await before.channel.delete()
-        if (
-            after.channel is not None
-            and (after.channel.name.startswith("game#") or after.channel.id in listAllChannels("lobby"))  
-            and (
-                cur.execute(f"SELECT id FROM users WHERE id = {member.id}").fetchone() is None
-                or isIngame(member.id) != int(after.channel.name.split("#")[-1])
+        if after.channel is not None and (
+            (
+                (after.channel.id in listAllChannels("lobby"))
+                and cur.execute(
+                    f"SELECT id FROM users WHERE id = {member.id}"
+                ).fetchone()
+                is None
+            )
+            or (
+                after.channel.name.startswith("game#")
+                and (
+                    cur.execute(
+                        f"SELECT id FROM users WHERE id = {member.id}"
+                    ).fetchone()
+                    is None
+                    or isIngame(member.id) != int(after.channel.name.split("#")[-1])
+                )
             )
         ):
             await member.move_to(before.channel)
 
         if (
             after.channel is None
-            or len(after.channel.members) != cur.execute("SELECT max_player FROM config").fetchone()[0]
+            or len(after.channel.members)
+            != cur.execute("SELECT max_player FROM config").fetchone()[0]
             or not after.channel.id in listAllChannels("lobby")
         ):
             return
