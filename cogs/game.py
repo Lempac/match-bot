@@ -179,18 +179,14 @@ class Game(commands.Cog):
             after.channel is not None
             and after.channel.name.startswith("game#")
             and (
-                cur.execute(f"SELECT id FROM users WHERE id = {member.id}").fetchone()
-                == None
+                cur.execute(f"SELECT id FROM users WHERE id = {member.id}").fetchone() is None
                 or isIngame(member.id) != int(after.channel.name.split("#")[-1])
             )
         ):
             await member.move_to(before.channel)
 
         if (
-            
-            before.channel != after.channel
-            # or before.channel is not None
-            # and
+            after.channel is None
             or len(before.channel.members) >= len(after.channel.members)
             or not after.channel.id in listAllChannels("lobby")
         ):
