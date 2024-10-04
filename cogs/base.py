@@ -14,10 +14,13 @@ from discord import (
     Status,
     TextChannel,
     User,
+    VoiceChannel,
     app_commands,
 )
 from discord.ext import commands
 from main import (
+    MY_GUILD,
+    CustomBot,
     IsAllreadyRegistered,
     NotInRegister,
     RegisterOnly,
@@ -42,8 +45,7 @@ class test(View):
     def __init__(
         self,
         bot: commands.Bot,
-        members: list[Member],
-        ch: TextChannel,
+        ch: VoiceChannel,
         timeout: float | NoneType = 180,
     ):
         super().__init__(timeout=timeout)
@@ -56,81 +58,71 @@ class test(View):
                     label=(member.nick or member.display_name or member.name),
                     value=str(member.id),
                 )
-                for member in members
+                for member in ch.members
             ],
         )
         self.bot = bot
-        self.members = members
+        self.ch = ch
         self.select.callback = self.test
         self.add_item(self.select)
-        discord.ui.UserSelect
 
     async def test(self, interaction: Interaction):
         if (
             interaction.message is None
-            or type(interaction.channel) is not TextChannel
             or self.bot.user is None
         ):
             return
         await interaction.message.delete()
-
+        print(self.ch.members)
         self.select.options = [
             SelectOption(
                 label=(member.nick or member.display_name or member.name),
                 value=str(member.id),
             )
-            for member in self.members
-            if member.id != int(self.select.values[0]) or member.status == Status.online
+            for member in self.ch.members
         ]
+        if type(interaction.channel) is not VoiceChannel and type(interaction.channel) is not TextChannel:
+            return
         await interaction.channel.send(view=self)
 
 
 class Base(commands.Cog):
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot: CustomBot) -> None:
         self.bot = bot
-
-    @commands.command()
-    @commands.is_owner()
-    async def sync(self, ctx: commands.Context) -> None:
+    
+    setupGroup = app_commands.Group(name="setup", description="Setup up server for usage...", default_permissions=Permissions.elevated(), guild_only=True)
+    
+    @app_commands.command()
+    @app_commands.default_permissions(**dict(Permissions.elevated()))
+    async def sync(self, interaction: Interaction) -> None:
         """Sync commands"""
-        synced = await ctx.bot.tree.sync()
-        await ctx.send(f"Synced {len(synced)} commands globally")
+        self.bot.tree.clear_commands(guild=MY_GUILD)
+        # if MY_GUILD is not None:
+            # self.bot.tree.copy_global_to(guild=MY_GUILD)
+        synced = await self.bot.tree.sync(guild=MY_GUILD) 
+        await self.bot.tree.sync()
+        await interaction.response.send_message(f"Synced {len(synced)} commands globally", ephemeral=True)
 
     @app_commands.command(description="testing only")
     @app_commands.guild_only
-    async def testing(self, interaction: discord.Interaction):
+    async def testing(self, interaction: Interaction):
         gl = self.bot.get_guild(1275578076364800010)
         if gl is None:
             return
         vc = gl.voice_channels[1]
         if vc.name != "lobby":
             return
+        # await vc.send(view=test(self.bot, vc))
         mb = gl.get_member(1275577286816694375)
         if mb is None:
             return
         await vc.connect()
         await interaction.response.send_message("Done", ephemeral=True)
 
-    @app_commands.command(description="Setup up server for usage...")
-    @app_commands.default_permissions(**dict(Permissions.elevated()))
-    @app_commands.choices(
-        options=[
-            app_commands.Choice(name="Add lobby", value="addlobby"),
-            app_commands.Choice(name="Add rank", value="addrank"),
-        ]
-    )
-    @app_commands.guild_only
-    async def setup(
-        self, interaction: discord.Interaction, options: Optional[str]
-    ) -> None:
+    @setupGroup.command()
+    async def init(self, interaction: Interaction) -> None:
         if interaction.guild is None:
             return
-        await interaction.response.defer()
-
-        if options == "addlobby":
-            await addLobby(interaction.guild)
-        if options == "addrank":
-            await interaction.guild.create_role()
         if (
             cur.execute(
                 f"SELECT id FROM registerRole WHERE guild = {interaction.guild_id}"
@@ -142,7 +134,7 @@ class Base(commands.Cog):
                 f"INSERT INTO registerRole VALUES ({role.id}, {interaction.guild_id})"
             )
             cur.connection.commit()
-        if options is None and not len(
+        if not len(
             set([x.id for x in interaction.guild.text_channels])
             & set(listAllChannels("register"))
         ):
@@ -153,13 +145,40 @@ class Base(commands.Cog):
                 """
             )
             cur.connection.commit()
-        if options is None and not len(
+        if not len(
             set([x.id for x in interaction.guild.voice_channels])
             & set(listAllChannels("lobby"))
         ):
             await addLobby(interaction.guild)
         cur.connection.commit()
-        await interaction.followup.send("Done...")
+        await interaction.response.send_message("Done...", ephemeral=True)
+
+
+    @setupGroup.command()
+    async def addlobby(
+        self, interaction: Interaction
+    ) -> None:
+        if interaction.guild is None:
+            return
+        await addLobby(interaction.guild)
+        await interaction.response.send_message("Done...")
+
+    @setupGroup.command()
+    async def addrank(self, interaction: Interaction) -> None:
+        await interaction.response.send_message("Work in progress...", ephemeral=True)
+
+    @setupGroup.command()
+    async def setmaxplayers(self, interaction: Interaction, amount: int):
+        cur.execute(f"UPDATE config SET max_player = ({amount})")
+        cur.connection.commit()
+        await interaction.response.send_message("Done...")
+
+    @setupGroup.command()
+    async def setpointspergame(self, interaction: Interaction, amount: int):
+        cur.execute(f"UPDATE config SET points_per_game = ({amount})")
+        cur.connection.commit()
+        await interaction.response.send_message("Done...")
+
 
     @app_commands.command(description="Add or remove elo...")
     @app_commands.describe(
@@ -334,7 +353,7 @@ class Base(commands.Cog):
             return await interaction.response.send_message("Your not registered...")
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: CustomBot):
     await bot.add_cog(Base(bot))
 
 

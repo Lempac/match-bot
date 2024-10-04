@@ -1,4 +1,11 @@
 -- SQLite
+
+CREATE TABLE
+    IF NOT EXISTS config (
+        max_player INT DEFAULT 10,
+        points_per_game INT DEFAULT 25
+    );
+
 CREATE TABLE
     IF NOT EXISTS channels (
         id INTEGER PRIMARY KEY,

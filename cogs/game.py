@@ -13,6 +13,7 @@ from discord import (
     SelectOption,
     StageChannel,
     TextChannel,
+    User,
     VoiceChannel,
     VoiceState,
     app_commands,
@@ -45,7 +46,7 @@ async def rewardPlayers(interaction: Interaction, game: int, won: int):
     losePlayers: list[tuple[int]] = cur.execute(
         f"SELECT player FROM games JOIN teams ON teams.game = games.id WHERE teams.game = {game} AND teams.id = {2 if won == 1 else 1}"
     ).fetchall()
-    constRewardElo = int(os.getenv("points_per_game") or 25)
+    constRewardElo : int = cur.execute("SELECT points_per_game FROM config").fetchone()[0]
     if type(interaction.guild) is Guild:
         for player in wonPlayers:
             insPlayer = interaction.guild.get_member(player[0])
@@ -86,12 +87,9 @@ class UserMenu(View):
         self.count = 2
         self.vc1 = vc1
         self.vc2 = vc2
-        self.lobby = lobby
+        self.lobby = cast(VoiceChannel, lobby.guild.get_channel(lobby.id))
         self.game = game
         self.select = None
-
-    async def loadUser(self):
-        self.lobby = cast(VoiceChannel, await self.lobby.guild.fetch_channel(self.lobby.id))
         self.select = Select(
             placeholder="Select a player:",
             min_values=1,
@@ -107,7 +105,6 @@ class UserMenu(View):
         self.select.callback = self.user_select
         self.add_item(self.select)
 
-
     async def user_select(self, interaction: Interaction) -> None:
         if (
             interaction.guild is None
@@ -116,7 +113,7 @@ class UserMenu(View):
         ):
             return
 
-        if self.count == int(os.getenv("max_player") or 10):
+        if self.count == cur.execute("SELECT max_player FROM config").fetchone()[0]:
             return await interaction.message.delete()
         await interaction.message.delete()
         self.count += 1
@@ -137,10 +134,6 @@ class UserMenu(View):
             )
             cur.connection.commit()
             await userMember.move_to(self.vc2)
-
-        self.lobby = cast(
-            VoiceChannel, await self.lobby.guild.fetch_channel(self.lobby.id)
-        )
 
         if len(self.lobby.members) == 0:
             return
@@ -179,13 +172,13 @@ class Game(commands.Cog):
             data: list[tuple[int]] = cur.execute(
                 f"SELECT teamleader1, teamleader2 FROM games WHERE id = {game}"
             ).fetchone()
-            # if member.id == data[0] or member.id == data[1]:
-            #     await removePlayers(member.guild, game)
+            if member.id == data[0] or member.id == data[1]:
+                await removePlayers(member.guild, game)
             cur.execute(
                 f"UPDATE games SET state = 'voided' WHERE id = {game} AND state = 'playing'"
             )
             cur.connection.commit()
-            # await before.channel.delete()
+            await before.channel.delete()
         if (
             after.channel is not None
             and after.channel.name.startswith("game#")
@@ -206,7 +199,7 @@ class Game(commands.Cog):
         ):
             return
         players = after.channel.members
-        if len(players) < int(os.getenv("max_player") or 10):
+        if len(players) < cur.execute("SELECT max_player FROM config").fetchone()[0]:
             return
         lead1, lead2 = random.sample(players, 2)
         cur.execute(
@@ -228,13 +221,54 @@ class Game(commands.Cog):
         vc2 = await member.guild.create_voice_channel(f"game#team2#{currentGameNumber}")
         await lead1.move_to(vc1)
         await lead2.move_to(vc2)
-        if type(after.channel) is VoiceChannel and len(after.channel.members) != 0:
-            menu = UserMenu(vc1, vc2, after.channel, currentGameNumber)
-            await menu.loadUser()
-            await random.choice([vc1, vc2]).send(
-                "Select a team mate:",
-                view=menu,
-            )
+        # if type(after.channel) is VoiceChannel and len(after.channel.members) != 0:
+        #     menu = UserMenu(vc1, vc2, after.channel, currentGameNumber)
+        #     await random.choice([vc1, vc2]).send(
+        #         "Select a team mate:",
+        #         view=menu,
+        #     )
+
+    @app_commands.command(description="Select player...")
+    @app_commands.guild_only
+    async def pick(self, interaction: Interaction, player : Member):
+        user = interaction.user
+        gameID = isIngame(user.id)
+        if gameID == -1:
+            return await interaction.response.send_message("Your not ingame...", ephemeral=True)
+        teamlead1, teamlead2 = cast(tuple[int, int], cur.execute("SELECT teamleader1, teamleader2").fetchone())
+        players : list[tuple[int, int]] = cur.execute(f"SELECT id, player FROM teams WHERE game = {gameID}").fetchall()
+        if len(players) == cur.execute("SELECT max_player FROM config").fetchone()[0] * 2:
+            return await interaction.response.send_message("Game all ready has max players...", ephemeral=True)
+        teamCount1, teamCount2 = 0, 0 
+        for playerInTeam in players:
+            if player.id == playerInTeam[0]:
+                return await interaction.response.send_message("Already in team...", ephemeral=True)
+            teamCount1 += 1 if playerInTeam[0] == 1 else 0
+            teamCount2 += 1 if playerInTeam[0] == 2 else 0
+        if user.id == teamlead1:
+            if teamCount1 > teamCount2:
+                return await interaction.response.send_message("Waiting for other team...", ephemeral=True)
+            else:
+                if type(user) is not Member or user.voice is None:
+                    return await interaction.response.send_message("How???", ephemeral=True)
+                cur.execute(
+                    f"INSERT INTO teams(id, game, player) VALUES (1, {gameID}, {player.id})"
+                )
+                cur.connection.commit()
+                await player.move_to(user.voice.channel)
+        elif user.id == teamlead2:
+            if teamCount2 >= teamCount1:
+                return await interaction.response.send_message("Waiting for other team...", ephemeral=True)
+            else:
+                if type(user) is not Member or user.voice is None:
+                    return await interaction.response.send_message("How???", ephemeral=True)
+                cur.execute(
+                    f"INSERT INTO teams(id, game, player) VALUES (2, {gameID}, {player.id})"
+                )
+                cur.connection.commit()
+                await player.move_to(user.voice.channel)
+        else:
+            await interaction.response.send_message("Your not a games teamleader...", ephemeral=True)
 
     @app_commands.command(description="Voids your current game...")
     @app_commands.guild_only

@@ -25,6 +25,8 @@ import discord.ext
 # loads .env file
 load_dotenv()
 
+guild_id = os.getenv("guild_id")
+MY_GUILD = discord.Object(int(guild_id)) if guild_id is not None else None
 
 con = sqlite3.connect("db.sqlite")
 cur = con.cursor()
@@ -144,11 +146,10 @@ class CustomBot(commands.Bot):
         await self._load_extensions()
         self._watcher = self.loop.create_task(self._cog_watcher())
         if not self.synced:
-            guild_id = os.getenv("guild_id")
-            if guild_id is not None:
-                gl = discord.Object(int(guild_id))
-                self.tree.copy_global_to(guild=gl)
-                await self.tree.sync(guild=gl)
+            # self.tree.clear_commands(guild=MY_GUILD)
+            if MY_GUILD is not None:
+                self.tree.copy_global_to(guild=MY_GUILD)
+            await self.tree.sync(guild=MY_GUILD)
             self.synced = not self.synced
             self.logger.info("Synced command tree")
 
