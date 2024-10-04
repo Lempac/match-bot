@@ -185,10 +185,11 @@ class Game(commands.Cog):
             await member.move_to(before.channel)
 
         if (
-            after.channel is None
-            or before.channel == after.channel
-            or before.channel is not None
-            and len(before.channel.members) >= len(after.channel.members)
+            # after.channel is None
+            # or before.channel == after.channel
+            # or before.channel is not None
+            # and 
+            len(before.channel.members) >= len(after.channel.members)
             or not after.channel.id in listAllChannels("lobby")
         ):
             return
