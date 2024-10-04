@@ -241,7 +241,7 @@ class Game(commands.Cog):
                 "Your not ingame...", ephemeral=True
             )
         teamlead1, teamlead2 = cast(
-            tuple[int, int], cur.execute("SELECT teamleader1, teamleader2").fetchone()
+            tuple[int, int], cur.execute(f"SELECT teamleader1, teamleader2 FROM games JOIN teams ON teams.game = games.id WHERE games.id = {gameID}").fetchone()
         )
         if player == teamlead1 or player == teamlead2:
             return await interaction.response.send_message(
