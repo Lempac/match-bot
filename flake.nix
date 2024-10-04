@@ -18,6 +18,7 @@
               py.python-dotenv
             ]))
             pkgs.sqlite
+            pkgs.nodejs_20
         ];
     };
   };

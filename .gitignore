@@ -1,3 +1,19 @@
 .env
 *.db
 *.sqlite
+# Devenv
+.devenv*
+devenv.local.nix
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
+
+.vscode
+.idea
+
+#python 
+
+__pycache__
