@@ -177,7 +177,7 @@ class Game(commands.Cog):
             await before.channel.delete()
         if (
             after.channel is not None
-            and after.channel.name.startswith("game#")
+            and (after.channel.name.startswith("game#") or after.channel.id in listAllChannels("lobby"))  
             and (
                 cur.execute(f"SELECT id FROM users WHERE id = {member.id}").fetchone() is None
                 or isIngame(member.id) != int(after.channel.name.split("#")[-1])
@@ -187,13 +187,11 @@ class Game(commands.Cog):
 
         if (
             after.channel is None
-            or len(before.channel.members) >= len(after.channel.members)
+            or len(after.channel.members) != cur.execute("SELECT max_player FROM config").fetchone()[0]
             or not after.channel.id in listAllChannels("lobby")
         ):
             return
         players = after.channel.members
-        if len(players) < cur.execute("SELECT max_player FROM config").fetchone()[0]:
-            return
         lead1, lead2 = random.sample(players, 2)
         cur.execute(
             f"""INSERT INTO games(teamleader1, teamleader2) VALUES (
