@@ -105,17 +105,17 @@ class Base(commands.Cog):
     @app_commands.guild_only
     async def testing(self, interaction: Interaction):
         # print(interaction.guild.me.name)
-        # gl = self.bot.get_guild(1275578076364800010)
-        # if gl is None:
-        #     return
-        # vc = gl.voice_channels[1]
-        # if vc.name != "lobby":
-        #     return
-        # await vc.send(view=test(self.bot, vc))
-        # mb = gl.get_member(1275577286816694375)
-        # if mb is None:
-        #     return
-        # await vc.connect()
+        gl = self.bot.get_guild(1275578076364800010)
+        if gl is None:
+            return
+        vc = gl.voice_channels[1]
+        if vc.name != "lobby":
+            return
+        await vc.send(view=test(self.bot, vc))
+        mb = gl.get_member(1275577286816694375)
+        if mb is None:
+            return
+        await vc.connect()
         await interaction.response.send_message("Done", ephemeral=True)
 
     @setupGroup.command()
