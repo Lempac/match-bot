@@ -41,7 +41,9 @@ async def rewardPlayers(interaction: Interaction, game: int, won: int):
     losePlayers: list[tuple[int]] = cur.execute(
         f"SELECT player FROM games JOIN teams ON teams.game = games.id WHERE teams.game = {game} AND teams.id = {2 if won == 1 else 1}"
     ).fetchall()
-    constRewardElo : int = cur.execute("SELECT points_per_game FROM config").fetchone()[0]
+    constRewardElo: int = cur.execute("SELECT points_per_game FROM config").fetchone()[
+        0
+    ]
     if type(interaction.guild) is Guild:
         for player in wonPlayers:
             insPlayer = interaction.guild.get_member(player[0])
@@ -184,14 +186,12 @@ class Game(commands.Cog):
         ):
             await member.move_to(before.channel)
 
-        print(len(before.channel.members))
-        print(len(after.channel.members))
         if (
-            # after.channel is None
-            # or before.channel == after.channel
+            
+            before.channel != after.channel
             # or before.channel is not None
-            # and 
-            len(before.channel.members) >= len(after.channel.members)
+            # and
+            or len(before.channel.members) >= len(after.channel.members)
             or not after.channel.id in listAllChannels("lobby")
         ):
             return
@@ -231,25 +231,44 @@ class Game(commands.Cog):
         user = interaction.user
         gameID = isIngame(user.id)
         if gameID == -1:
-            return await interaction.response.send_message("Your not ingame...", ephemeral=True)
-        teamlead1, teamlead2 = cast(tuple[int, int], cur.execute("SELECT teamleader1, teamleader2").fetchone())
+            return await interaction.response.send_message(
+                "Your not ingame...", ephemeral=True
+            )
+        teamlead1, teamlead2 = cast(
+            tuple[int, int], cur.execute("SELECT teamleader1, teamleader2").fetchone()
+        )
         if player == teamlead1 or player == teamlead2:
-            return await interaction.response.send_message("This person is all ready a team leader...")
-        players : list[tuple[int, int]] = cur.execute(f"SELECT id, player FROM teams WHERE game = {gameID}").fetchall()
-        if len(players) == cur.execute("SELECT max_player FROM config").fetchone()[0] * 2:
-            return await interaction.response.send_message("Game all ready has max players...", ephemeral=True)
-        teamCount1, teamCount2 = 0, 0 
+            return await interaction.response.send_message(
+                "This person is all ready a team leader..."
+            )
+        players: list[tuple[int, int]] = cur.execute(
+            f"SELECT id, player FROM teams WHERE game = {gameID}"
+        ).fetchall()
+        if (
+            len(players)
+            == cur.execute("SELECT max_player FROM config").fetchone()[0] * 2
+        ):
+            return await interaction.response.send_message(
+                "Game all ready has max players...", ephemeral=True
+            )
+        teamCount1, teamCount2 = 0, 0
         for playerInTeam in players:
             if player.id == playerInTeam[0]:
-                return await interaction.response.send_message("Already in team...", ephemeral=True)
+                return await interaction.response.send_message(
+                    "Already in team...", ephemeral=True
+                )
             teamCount1 += 1 if playerInTeam[0] == 1 else 0
             teamCount2 += 1 if playerInTeam[0] == 2 else 0
         if user.id == teamlead1:
             if teamCount1 > teamCount2:
-                return await interaction.response.send_message("Waiting for other team...", ephemeral=True)
+                return await interaction.response.send_message(
+                    "Waiting for other team...", ephemeral=True
+                )
             else:
                 if type(user) is not Member or user.voice is None:
-                    return await interaction.response.send_message("How???", ephemeral=True)
+                    return await interaction.response.send_message(
+                        "How???", ephemeral=True
+                    )
                 cur.execute(
                     f"INSERT INTO teams(id, game, player) VALUES (1, {gameID}, {player.id})"
                 )
@@ -257,17 +276,23 @@ class Game(commands.Cog):
                 await player.move_to(user.voice.channel)
         elif user.id == teamlead2:
             if teamCount2 >= teamCount1:
-                return await interaction.response.send_message("Waiting for other team...", ephemeral=True)
+                return await interaction.response.send_message(
+                    "Waiting for other team...", ephemeral=True
+                )
             else:
                 if type(user) is not Member or user.voice is None:
-                    return await interaction.response.send_message("How???", ephemeral=True)
+                    return await interaction.response.send_message(
+                        "How???", ephemeral=True
+                    )
                 cur.execute(
                     f"INSERT INTO teams(id, game, player) VALUES (2, {gameID}, {player.id})"
                 )
                 cur.connection.commit()
                 await player.move_to(user.voice.channel)
         else:
-            await interaction.response.send_message("Your not a games teamleader...", ephemeral=True)
+            await interaction.response.send_message(
+                "Your not a games teamleader...", ephemeral=True
+            )
 
     @app_commands.command(description="Voids your current game...")
     @app_commands.guild_only
