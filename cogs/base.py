@@ -111,7 +111,7 @@ class Base(commands.Cog):
         vc = gl.voice_channels[1]
         if vc.name != "lobby":
             return
-        await vc.send(view=test(self.bot, vc))
+        # await vc.send(view=test(self.bot, vc))
         mb = gl.get_member(1275577286816694375)
         if mb is None:
             return

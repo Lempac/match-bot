@@ -184,6 +184,8 @@ class Game(commands.Cog):
         ):
             await member.move_to(before.channel)
 
+        print(len(before.channel.members))
+        print(len(after.channel.members))
         if (
             # after.channel is None
             # or before.channel == after.channel
