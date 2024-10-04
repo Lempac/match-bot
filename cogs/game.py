@@ -1,8 +1,4 @@
-import datetime
-import os
 import random
-from time import sleep
-import time
 from typing import cast
 from discord.ui import View, Select
 from discord import (
@@ -13,7 +9,6 @@ from discord import (
     SelectOption,
     StageChannel,
     TextChannel,
-    User,
     VoiceChannel,
     VoiceState,
     app_commands,
@@ -162,7 +157,6 @@ class Game(commands.Cog):
     ) -> None:
         if type(after.channel) is StageChannel:
             return
-
         if (
             before.channel is not None
             and before.channel.name.startswith("game#")
