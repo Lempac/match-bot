@@ -248,7 +248,7 @@ class Game(commands.Cog):
         )
         if player == teamlead1 or player == teamlead2:
             return await interaction.response.send_message(
-                "This person is all ready a team leader..."
+                "This person is all ready a team leader in the game..."
             )
         players: list[tuple[int, int]] = cur.execute(
             f"SELECT id, player FROM teams WHERE game = {gameID}"
@@ -262,7 +262,7 @@ class Game(commands.Cog):
             )
         teamCount1, teamCount2 = 0, 0
         for playerInTeam in players:
-            if player.id == playerInTeam[0]:
+            if player.id == playerInTeam[1]:
                 return await interaction.response.send_message(
                     "Already in team...", ephemeral=True
                 )
