@@ -280,6 +280,7 @@ class Game(commands.Cog):
                 )
                 cur.connection.commit()
                 await player.move_to(user.voice.channel)
+                await interaction.response.send_message("Done...", ephemeral=True)
         elif user.id == teamlead2:
             if teamCount2 >= teamCount1:
                 return await interaction.response.send_message(
@@ -295,6 +296,7 @@ class Game(commands.Cog):
                 )
                 cur.connection.commit()
                 await player.move_to(user.voice.channel)
+                await interaction.response.send_message("Done...", ephemeral=True)
         else:
             await interaction.response.send_message(
                 "Your not a games teamleader...", ephemeral=True
