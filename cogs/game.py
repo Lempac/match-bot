@@ -284,7 +284,7 @@ class Game(commands.Cog):
                 cur.connection.commit()
                 await player.move_to(user.voice.channel)
                 await interaction.response.send_message("Done...", ephemeral=True)
-                await cast(VoiceChannel, discord.utils.find(lambda ch: ch.name == f"game#team2#{gameID}", user.guild.voice_channels)[0]).send("Team 2 leader `/pick` now...")
+                await cast(VoiceChannel, discord.utils.find(lambda ch: ch.name == f"game#team2#{gameID}", user.guild.voice_channels)).send("Team 2 leader `/pick` now...")
                 
         elif user.id == teamlead2:
             if teamCount2 >= teamCount1:
@@ -302,7 +302,7 @@ class Game(commands.Cog):
                 cur.connection.commit()
                 await player.move_to(user.voice.channel)
                 await interaction.response.send_message("Done...", ephemeral=True)
-                await cast(VoiceChannel, discord.utils.find(lambda ch: ch.name == f"game#team1#{gameID}", user.guild.voice_channels)[0]).send("Team 1 leader `/pick` now...")
+                await cast(VoiceChannel, discord.utils.find(lambda ch: ch.name == f"game#team1#{gameID}", user.guild.voice_channels)).send("Team 1 leader `/pick` now...")
         else:
             await interaction.response.send_message(
                 "Your not a games teamleader...", ephemeral=True
