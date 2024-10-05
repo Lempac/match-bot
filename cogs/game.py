@@ -163,7 +163,6 @@ class Game(commands.Cog):
         if (
             before.channel is not None
             and before.channel.name.startswith("game#")
-            and len(before.channel.members) == 0
         ):
             game = int(before.channel.name.split("#")[-1])
             data: list[tuple[int]] = cur.execute(
@@ -171,6 +170,8 @@ class Game(commands.Cog):
             ).fetchone()
             if member.id == data[0] or member.id == data[1]:
                 await removePlayers(member.guild, game)
+            else:
+                return
             cur.execute(
                 f"UPDATE games SET state = 'voided' WHERE id = {game} AND state = 'playing'"
             )
