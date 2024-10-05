@@ -225,7 +225,7 @@ class Game(commands.Cog):
         vc2 = await member.guild.create_voice_channel(f"game#team2#{currentGameNumber}")
         await lead1.move_to(vc1)
         await lead2.move_to(vc2)
-        vc1.send("Use: `/pick` `username` for adding person to your team")
+        await vc1.send("Use: `/pick` `username` for adding person to your team")
         # if type(after.channel) is VoiceChannel and len(after.channel.members) != 0:
         #     menu = UserMenu(vc1, vc2, after.channel, currentGameNumber)
         #     await random.choice([vc1, vc2]).send(
@@ -283,7 +283,7 @@ class Game(commands.Cog):
                 cur.connection.commit()
                 await player.move_to(user.voice.channel)
                 await interaction.response.send_message("Done...", ephemeral=True)
-                await cast(VoiceChannel, discord.utils.find(lambda ch: ch.name == f"game#team2#{gameID}", user.guild.channels)[0]).send("Team 2 leader `/pick` now...")
+                await cast(VoiceChannel, discord.utils.find(lambda ch: ch.name == f"game#team2#{gameID}", user.guild.voice_channels)[0]).send("Team 2 leader `/pick` now...")
                 
         elif user.id == teamlead2:
             if teamCount2 >= teamCount1:
@@ -301,7 +301,7 @@ class Game(commands.Cog):
                 cur.connection.commit()
                 await player.move_to(user.voice.channel)
                 await interaction.response.send_message("Done...", ephemeral=True)
-                await cast(VoiceChannel, discord.utils.find(lambda ch: ch.name == f"game#team1#{gameID}", user.guild.channels)[0]).send("Team 1 leader `/pick` now...")
+                await cast(VoiceChannel, discord.utils.find(lambda ch: ch.name == f"game#team1#{gameID}", user.guild.voice_channels)[0]).send("Team 1 leader `/pick` now...")
         else:
             await interaction.response.send_message(
                 "Your not a games teamleader...", ephemeral=True
