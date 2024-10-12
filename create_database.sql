@@ -6,7 +6,7 @@ CREATE TABLE
         max_player INT DEFAULT 10,
         points_per_game INT DEFAULT 25,
         free_multiplier FLOAT DEFAULT 1,
-        premium_multiplier FLOAT DEFAULT 1,
+        premium_multiplier FLOAT DEFAULT 1
     );
 
 CREATE TABLE
@@ -27,7 +27,7 @@ CREATE TABLE
         id INTEGER PRIMARY KEY,
         guild INTEGERNOT NULL,
         below INTEGER NOT NULL DEFAULT 0,
-        above INTEGER NOT NULL 
+        above INTEGER NOT NULL
     );
 
 CREATE TABLE
