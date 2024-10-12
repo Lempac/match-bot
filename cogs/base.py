@@ -211,7 +211,7 @@ class Base(commands.Cog):
             app_commands.Choice(name="premium", value="premium"),
         ]
     )
-    async def setelomultiplier(self, interaction: Interaction, who: str, amount: int):
+    async def setelomultiplier(self, interaction: Interaction, who: str, amount: float):
         if who == "free":
             cur.execute(
                 f"REPLACE INTO config(id, free_multiplier) VALUES (0, {amount})"
