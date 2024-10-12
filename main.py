@@ -42,8 +42,6 @@ with open("create_database.sql", "r") as sql_file:
 
 cur.executescript(sql_script)
 
-print(cur.execute("SELECT max_player FROM config").fetchone()[0])
-
 def listAllChannels(type: Literal["lobby", "register", "score"]) -> list[int]:
     return [
         x[0]

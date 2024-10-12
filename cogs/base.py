@@ -42,7 +42,7 @@ async def addChannel(guild: discord.Guild, type: str) -> None:
     textCh = await guild.create_text_channel(type)
     cur.execute(
         f"""
-        INSERT INTO channels(id, type) VALUES ({textCh.id}, {type})
+        INSERT INTO channels(id, type) VALUES ({textCh.id}, '{type}')
         """
     )
     
