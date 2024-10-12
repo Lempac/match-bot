@@ -32,7 +32,8 @@
   
 ### V2:
 - [ ] Swap people
-- [ ] Show result in channel
+- [x] Show result in channel
 - [ ] Refactor
-- [ ] Ranks
+- [x] Ranks
 - [x] Move to bot
+- [x] Multiplier command

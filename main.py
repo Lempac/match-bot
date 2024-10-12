@@ -44,7 +44,7 @@ cur.executescript(sql_script)
 
 print(cur.execute("SELECT max_player FROM config").fetchone()[0])
 
-def listAllChannels(type: Literal["lobby", "register"]) -> list[int]:
+def listAllChannels(type: Literal["lobby", "register", "score"]) -> list[int]:
     return [
         x[0]
         for x in cur.execute(

@@ -15,6 +15,7 @@ from discord import (
     app_commands,
 )
 from discord.ext import commands
+from cogs.base import syncRanks
 from main import changeElo, changeNick, cur, listAllChannels
 
 
@@ -45,13 +46,19 @@ async def rewardPlayers(interaction: Interaction, game: int, won: int):
     constRewardElo: int = cur.execute("SELECT points_per_game FROM config").fetchone()[
         0
     ]
+    constFreeMul: int = cur.execute("SELECT free_multiplier FROM config").fetchone()[
+        0
+    ]
+    constPremMul: int = cur.execute("SELECT premium_multiplier FROM config").fetchone()[
+        0
+    ]
     if type(interaction.guild) is Guild:
         for player in wonPlayers:
             insPlayer = interaction.guild.get_member(player[0])
             if type(insPlayer) is Member:
                 changeElo(
                     player[0],
-                    constRewardElo * 2 if insPlayer.premium_since else constRewardElo,
+                    constRewardElo * constPremMul if insPlayer.premium_since else constRewardElo * constFreeMul,
                 )
                 data: tuple[str, int] = cur.execute(
                     f"SELECT name, elo FROM users WHERE id = {player[0]}"
@@ -70,84 +77,7 @@ async def rewardPlayers(interaction: Interaction, game: int, won: int):
                     f"SELECT name, elo FROM users WHERE id = {player[0]}"
                 ).fetchone()
                 await changeNick(insPlayer, f"[ {data[1]} ] {data[0]}")
-
-
-class UserMenu(View):
-    def __init__(
-        self,
-        vc1: VoiceChannel,
-        vc2: VoiceChannel,
-        lobby: VoiceChannel,
-        game: int,
-        timeout: float | None = 180,
-    ):
-        super().__init__(timeout=timeout)
-        self.count = 2
-        self.vc1 = vc1
-        self.vc2 = vc2
-        self.lobby = cast(VoiceChannel, lobby.guild.get_channel(lobby.id))
-        self.game = game
-        self.select = None
-        self.select = Select(
-            placeholder="Select a player:",
-            min_values=1,
-            max_values=1,
-            options=[
-                SelectOption(
-                    label=(member.nick or member.display_name or member.name),
-                    value=str(member.id),
-                )
-                for member in self.lobby.members
-            ],
-        )
-        self.select.callback = self.user_select
-        self.add_item(self.select)
-
-    async def user_select(self, interaction: Interaction) -> None:
-        if (
-            interaction.guild is None
-            or interaction.message is None
-            or interaction.channel is None
-        ):
-            return
-
-        if self.count == cur.execute("SELECT max_player FROM config").fetchone()[0]:
-            return await interaction.message.delete()
-        await interaction.message.delete()
-        self.count += 1
-        if self.select is None:
-            return
-        userMember = interaction.guild.get_member(int(self.select.values[0]))
-        if userMember is None:
-            return
-        if interaction.channel is self.vc1:
-            cur.execute(
-                f"INSERT INTO teams(id, game, player) VALUES (1, {self.game}, {userMember.id})"
-            )
-            cur.connection.commit()
-            await userMember.move_to(self.vc1)
-        elif interaction.channel is self.vc2:
-            cur.execute(
-                f"INSERT INTO teams(id, game, player) VALUES (2, {self.game}, {userMember.id})"
-            )
-            cur.connection.commit()
-            await userMember.move_to(self.vc2)
-
-        if len(self.lobby.members) == 0:
-            return
-
-        self.select.options = [
-            SelectOption(
-                label=(member.nick or member.display_name or member.name),
-                value=str(member.id),
-            )
-            for member in self.lobby.members
-        ]
-
-        if interaction.channel is self.vc1:
-            await self.vc2.send("Select a player:", view=self)
-        elif interaction.channel is self.vc2:
-            await self.vc1.send("Select a player:", view=self)
+    syncRanks()
 
 
 class Game(commands.Cog):
@@ -160,10 +90,7 @@ class Game(commands.Cog):
     ) -> None:
         if type(after.channel) is StageChannel:
             return
-        if (
-            before.channel is not None
-            and before.channel.name.startswith("game#")
-        ):
+        if before.channel is not None and before.channel.name.startswith("game#"):
             game = int(before.channel.name.split("#")[-1])
             data: list[tuple[int]] = cur.execute(
                 f"SELECT teamleader1, teamleader2 FROM games WHERE id = {game}"
@@ -227,12 +154,11 @@ class Game(commands.Cog):
         await lead1.move_to(vc1)
         await lead2.move_to(vc2)
         await vc1.send("Use: `/pick` `username` for adding person to your team")
-        # if type(after.channel) is VoiceChannel and len(after.channel.members) != 0:
-        #     menu = UserMenu(vc1, vc2, after.channel, currentGameNumber)
-        #     await random.choice([vc1, vc2]).send(
-        #         "Select a team mate:",
-        #         view=menu,
-        #     )
+
+    @app_commands.command(description="Swap player in team...")
+    @app_commands.guild_only
+    async def swap(self, interaction: Interaction, who: Member, to: Member):
+        return await interaction.response.send_message("Work in progress...", ephemeral=True)
 
     @app_commands.command(description="Select player...")
     @app_commands.guild_only
@@ -244,7 +170,10 @@ class Game(commands.Cog):
                 "Your not ingame...", ephemeral=True
             )
         teamlead1, teamlead2 = cast(
-            tuple[int, int], cur.execute(f"SELECT teamleader1, teamleader2 FROM games JOIN teams ON teams.game = games.id WHERE games.id = {gameID}").fetchone()
+            tuple[int, int],
+            cur.execute(
+                f"SELECT teamleader1, teamleader2 FROM games JOIN teams ON teams.game = games.id WHERE games.id = {gameID}"
+            ).fetchone(),
         )
         if player == teamlead1 or player == teamlead2:
             return await interaction.response.send_message(
@@ -284,8 +213,14 @@ class Game(commands.Cog):
                 cur.connection.commit()
                 await player.move_to(user.voice.channel)
                 await interaction.response.send_message("Done...", ephemeral=True)
-                await cast(VoiceChannel, discord.utils.find(lambda ch: ch.name == f"game#team2#{gameID}", user.guild.voice_channels)).send("Team 2 leader `/pick` now...")
-                
+                await cast(
+                    VoiceChannel,
+                    discord.utils.find(
+                        lambda ch: ch.name == f"game#team2#{gameID}",
+                        user.guild.voice_channels,
+                    ),
+                ).send("Team 2 leader `/pick` now...")
+
         elif user.id == teamlead2:
             if teamCount2 >= teamCount1:
                 return await interaction.response.send_message(
@@ -302,7 +237,13 @@ class Game(commands.Cog):
                 cur.connection.commit()
                 await player.move_to(user.voice.channel)
                 await interaction.response.send_message("Done...", ephemeral=True)
-                await cast(VoiceChannel, discord.utils.find(lambda ch: ch.name == f"game#team1#{gameID}", user.guild.voice_channels)).send("Team 1 leader `/pick` now...")
+                await cast(
+                    VoiceChannel,
+                    discord.utils.find(
+                        lambda ch: ch.name == f"game#team1#{gameID}",
+                        user.guild.voice_channels,
+                    ),
+                ).send("Team 1 leader `/pick` now...")
         else:
             await interaction.response.send_message(
                 "Your not a games teamleader...", ephemeral=True
@@ -362,6 +303,15 @@ class Game(commands.Cog):
             cur.connection.commit()
         else:
             await interaction.response.send_message("Your not a team leader...")
+        
+        channelid: set[int] = (set([x.id for x in interaction.guild.text_channels]) & set(listAllChannels("score")))
+        if len(channelid) == 0:
+            return 
+        else:
+            channelid: int = channelid[0]
+        res = discord.Embed(title= "Team 1 won:" if data[0] == interaction.user.id else "Team 2 won:")
+        res.set_image(gamescreenshot.url)
+        interaction.guild.get_channel(channelid).send(embed=res)
 
 
 async def setup(bot: commands.Bot):

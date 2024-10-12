@@ -37,69 +37,69 @@ async def addLobby(guild: discord.Guild) -> None:
         INSERT INTO channels(id, type) VALUES ({lobvc.id}, 'lobby')
         """
     )
-
-
-class test(View):
-    def __init__(
-        self,
-        bot: commands.Bot,
-        ch: VoiceChannel,
-        timeout: float | NoneType = 180,
-    ):
-        super().__init__(timeout=timeout)
-        self.select = Select(
-            placeholder="Select a player",
-            max_values=1,
-            min_values=1,
-            options=[
-                SelectOption(
-                    label=(member.nick or member.display_name or member.name),
-                    value=str(member.id),
-                )
-                for member in ch.members
-            ],
-        )
-        self.bot = bot
-        self.ch = ch
-        self.select.callback = self.test
-        self.add_item(self.select)
-
-    async def test(self, interaction: Interaction):
-        if (
-            interaction.message is None
-            or self.bot.user is None
-        ):
-            return
-        await interaction.message.delete()
-        print(self.ch.members)
-        self.select.options = [
-            SelectOption(
-                label=(member.nick or member.display_name or member.name),
-                value=str(member.id),
-            )
-            for member in self.ch.members
-        ]
-        if type(interaction.channel) is not VoiceChannel and type(interaction.channel) is not TextChannel:
-            return
-        await interaction.channel.send(view=self)
+    
+async def addChannel(guild: discord.Guild, type: str) -> None:
+    textCh = await guild.create_text_channel(type)
+    cur.execute(
+        f"""
+        INSERT INTO channels(id, type) VALUES ({textCh.id}, {type})
+        """
+    )
+    
+async def syncRanks(guild: discord.Guild) -> None:
+    ranks: list[set[int, int, int, int]] = cur.execute("SELECT * FROM ranks").fetchall()
+    regMembers: list[set[int, str, int]] = cur.execute("SELECT * FROM users").fetchall()
+    membersId: list[int] = map(lambda m: m[0], regMembers)
+    for rank in ranks:
+        if guild.id != rank[1]:
+            ranks.remove(rank)
+            continue
+        if guild.get_role(rank[0]) is None:
+            cur.execute(f"DELETE FROM ranks WHERE id = {rank[0]}")
+            cur.connection.commit()
+            ranks.remove(rank)
+    
+    for member in guild.members:
+        if not member.id in membersId:
+            continue
+        addRoles = set()
+        removeRoles = set()
+        for rank in ranks:
+            role = guild.get_role(rank[0])
+            elo = regMembers[membersId.index(member.id)][2]
+            if rank[3] <= elo or rank[2] <= elo:
+                addRoles.add(role)
+            elif rank[2] != 0 and member.get_role(role.id):
+                if elo < rank[2]:
+                    removeRoles.add(role)
+        await member.remove_roles(removeRoles)
+        await member.add_roles(addRoles)
+            
 
 
 class Base(commands.Cog):
     def __init__(self, bot: CustomBot) -> None:
         self.bot = bot
-    
-    setupGroup = app_commands.Group(name="setup", description="Setup up server for usage...", default_permissions=Permissions.elevated(), guild_only=True)
-    
+
+    setupGroup = app_commands.Group(
+        name="setup",
+        description="Setup up server for usage...",
+        default_permissions=Permissions.elevated(),
+        guild_only=True,
+    )
+
     @app_commands.command()
     @app_commands.default_permissions(**dict(Permissions.elevated()))
     async def sync(self, interaction: Interaction) -> None:
         """Sync commands"""
         self.bot.tree.clear_commands(guild=MY_GUILD)
         # if MY_GUILD is not None:
-            # self.bot.tree.copy_global_to(guild=MY_GUILD)
-        synced = await self.bot.tree.sync(guild=MY_GUILD) 
+        # self.bot.tree.copy_global_to(guild=MY_GUILD)
+        synced = await self.bot.tree.sync(guild=MY_GUILD)
         await self.bot.tree.sync()
-        await interaction.response.send_message(f"Synced {len(synced)} commands globally", ephemeral=True)
+        await interaction.response.send_message(
+            f"Synced {len(synced)} commands globally", ephemeral=True
+        )
 
     @app_commands.command(description="testing only")
     @app_commands.guild_only
@@ -137,34 +137,60 @@ class Base(commands.Cog):
             set([x.id for x in interaction.guild.text_channels])
             & set(listAllChannels("register"))
         ):
-            regchannel = await interaction.guild.create_text_channel("register")
-            cur.execute(
-                f"""
-                INSERT INTO channels(id, type) VALUES ({regchannel.id}, 'register')
-                """
-            )
+            await addChannel(interaction.guild, "register")
             cur.connection.commit()
         if not len(
             set([x.id for x in interaction.guild.voice_channels])
             & set(listAllChannels("lobby"))
         ):
             await addLobby(interaction.guild)
+            cur.connection.commit()
+            
+        if not len(
+            set([x.id for x in interaction.guild.text_channels])
+            & set(listAllChannels("score"))
+        ):
+            await addChannel(interaction.guild, "score")
+            cur.connection.commit()
+    
         cur.connection.commit()
         await interaction.response.send_message("Done...", ephemeral=True)
 
-
     @setupGroup.command()
-    async def addlobby(
-        self, interaction: Interaction
-    ) -> None:
+    async def addlobby(self, interaction: Interaction) -> None:
         if interaction.guild is None:
             return
         await addLobby(interaction.guild)
+        cur.connection.commit()
         await interaction.response.send_message("Done...")
 
     @setupGroup.command()
-    async def addrank(self, interaction: Interaction) -> None:
-        await interaction.response.send_message("Work in progress...", ephemeral=True)
+    async def addregister(self, interaction: Interaction) -> None:
+        if interaction.guild is None:
+            return
+        await addChannel(interaction.guild, "register")
+        cur.connection.commit()
+        await interaction.response.send_message("Done...")
+
+    @setupGroup.command()
+    async def addscore(self, interaction: Interaction) -> None:
+        if interaction.guild is None:
+            return
+        await addChannel(interaction.guild, "score")
+        cur.connection.commit()
+        await interaction.response.send_message("Done...")
+
+    @setupGroup.command()
+    @app_commands.guild_only
+    async def addrank(
+        self, interaction: Interaction, name: str, above: int, below: int
+    ) -> None:
+        role: discord.Role = await interaction.guild.create_role(name)
+        cur.execute(f"INSERT INTO ranks(id, guild, above, below) VALUES ({role.id}, {interaction.guild_id}, {above}, {below})")
+        cur.connection.commit()
+        syncRanks(interaction.guild)
+        await interaction.response.send_message("Done...")
+
 
     @setupGroup.command()
     async def setmaxplayers(self, interaction: Interaction, amount: int):
@@ -178,6 +204,24 @@ class Base(commands.Cog):
         cur.connection.commit()
         await interaction.response.send_message("Done...")
 
+    @setupGroup.command()
+    @app_commands.choices(
+        who=[
+            app_commands.Choice(name="free", value="free"),
+            app_commands.Choice(name="premium", value="premium"),
+        ]
+    )
+    async def setelomultiplier(self, interaction: Interaction, who: str, amount: int):
+        if who == "free":
+            cur.execute(
+                f"REPLACE INTO config(id, free_multiplier) VALUES (0, {amount})"
+            )
+        elif who == "premium":
+            cur.execute(
+                f"REPLACE INTO config(id, premium_multiplier) VALUES (0, {amount})"
+            )
+        cur.connection.commit()
+        await interaction.response.send_message("Done...")
 
     @app_commands.command(description="Add or remove elo...")
     @app_commands.describe(
@@ -265,7 +309,7 @@ class Base(commands.Cog):
                 f"SELECT id FROM registerRole WHERE guild = {interaction.guild_id}"
             ).fetchone()[0]
             data: tuple[str, int] = cur.execute(
-            f"SELECT name, elo FROM users WHERE id = {interaction.user.id}"
+                f"SELECT name, elo FROM users WHERE id = {interaction.user.id}"
             ).fetchone()
             if (
                 type(interaction.user) is Member
@@ -277,12 +321,11 @@ class Base(commands.Cog):
                     await interaction.user.add_roles(role)
             if await changeNick(interaction.user, f"[ {data[1]} ] {data[0]}"):
                 await interaction.response.send_message("Done...")
-            else: await interaction.response.send_message(
-                "Done...but your to cool for nickname change..."
-            )
-            return await interaction.followup.send(
-                "You are all ready registered..."
-            )
+            else:
+                await interaction.response.send_message(
+                    "Done...but your to cool for nickname change..."
+                )
+            return await interaction.followup.send("You are all ready registered...")
 
     @app_commands.command(description="Show player stats...")
     @app_commands.describe(member="Person that registered...")
