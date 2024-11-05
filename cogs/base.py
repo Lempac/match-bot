@@ -335,7 +335,7 @@ class Base(commands.Cog):
         ).fetchone()
         if data[0] is None:
             return await interaction.response.send_message(
-                "Member is not registered..."
+                "Member is not registered or doesnt have any games..."
             )
         embed = Embed()
         embed.add_field(name="Name", value=data[0])
