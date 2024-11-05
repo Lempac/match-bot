@@ -49,7 +49,7 @@ async def addChannel(guild: discord.Guild, type: str) -> None:
 async def syncRanks(guild: discord.Guild) -> None:
     ranks: list[set[int, int, int, int]] = cur.execute("SELECT * FROM ranks").fetchall()
     regMembers: list[set[int, str, int]] = cur.execute("SELECT * FROM users").fetchall()
-    membersId: list[int] = map(lambda m: m[0], regMembers)
+    membersId: list[int] = list(map(lambda m: m[0], regMembers))
     for rank in ranks:
         if guild.id != rank[1]:
             ranks.remove(rank)
