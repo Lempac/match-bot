@@ -185,10 +185,10 @@ class Base(commands.Cog):
     async def addrank(
         self, interaction: Interaction, name: str, above: int, below: int = 0
     ) -> None:
-        role: discord.Role = await interaction.guild.create_role(name)
+        role: discord.Role = await interaction.guild.create_role(name=name)
         cur.execute(f"INSERT INTO ranks(id, guild, above, below) VALUES ({role.id}, {interaction.guild_id}, {above}, {below})")
         cur.connection.commit()
-        syncRanks(interaction.guild)
+        await syncRanks(interaction.guild)
         await interaction.response.send_message("Done...")
 
 
