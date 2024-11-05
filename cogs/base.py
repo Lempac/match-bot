@@ -72,8 +72,8 @@ async def syncRanks(guild: discord.Guild) -> None:
             elif rank[2] != 0 and member.get_role(role.id):
                 if elo < rank[2]:
                     removeRoles.add(role)
-        await member.remove_roles(removeRoles)
-        await member.add_roles(addRoles)
+        await member.remove_roles(*removeRoles)
+        await member.add_roles(*addRoles)
             
 
 
