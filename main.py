@@ -52,7 +52,7 @@ def listAllChannels(type: Literal["lobby", "register", "score"]) -> list[int]:
 
 
 async def changeNick(member: Member, name: str) -> bool:
-    if member.top_role < member.guild.me.top_role or member.guild.owner != member:
+    if member.top_role < member.guild.me.top_role and member.guild.owner != member:
         await member.edit(nick=name)
         return True
     else:
