@@ -183,7 +183,7 @@ class Base(commands.Cog):
     @setupGroup.command()
     @app_commands.guild_only
     async def addrank(
-        self, interaction: Interaction, name: str, above: int, below: int
+        self, interaction: Interaction, name: str, above: int, below: int = 0
     ) -> None:
         role: discord.Role = await interaction.guild.create_role(name)
         cur.execute(f"INSERT INTO ranks(id, guild, above, below) VALUES ({role.id}, {interaction.guild_id}, {above}, {below})")
