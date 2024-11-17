@@ -59,6 +59,7 @@ async def syncRanks(guild: discord.Guild) -> None:
             cur.connection.commit()
             ranks.remove(rank)
     
+    #print(ranks)
     for member in guild.members:
         if not member.id in membersId:
             continue
@@ -96,7 +97,6 @@ class Base(commands.Cog):
         # if MY_GUILD is not None:
         # self.bot.tree.copy_global_to(guild=MY_GUILD)
         synced = await self.bot.tree.sync(guild=MY_GUILD)
-        await self.bot.tree.sync()
         await interaction.response.send_message(
             f"Synced {len(synced)} commands globally", ephemeral=True
         )
@@ -263,6 +263,14 @@ class Base(commands.Cog):
                 "Done...but your to cool for nickname change..."
             )
         )
+        await syncRanks(interaction.guild)
+    
+    @app_commands.command(description="Sync ranks with users...")
+    @app_commands.guild_only
+    @app_commands.default_permissions(**dict(Permissions.elevated()))
+    async def sync_ranks(self, interaction: Interaction) -> None:
+        await syncRanks(interaction.guild)
+        await interaction.response.send_message("Done...")
 
     @elo.error
     async def elo_error(
