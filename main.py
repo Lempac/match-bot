@@ -170,7 +170,7 @@ class CustomBot(commands.Bot):
 
     @property
     def uptime(self) -> datetime.timedelta:
-        return datetime.datetime.now(datetime.UTC) - self._uptime
+        return datetime.datetime.now(datetime.timezone.utc) - self._uptime
 
 
 def main() -> None:
