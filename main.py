@@ -72,7 +72,7 @@ def changeElo(id: int, amount: int) -> None:
 
 class CustomBot(commands.Bot):
     client: aiohttp.ClientSession
-    _uptime: datetime.datetime = datetime.datetime.now(tz=datetime.UTC)
+    _uptime: datetime.datetime = datetime.datetime.now(tz=datetime.timezone.utc)
     _watch: asyncio.Task
 
     def __init__(self, ext_dir: str, *args: typing.Any, **kwargs: typing.Any) -> None:
