@@ -11,6 +11,7 @@
       pkgs.python312Packages.discordpy
       pkgs.python312Packages.python-dotenv
       pkgs.sqlite
+      pkgs.pyright
   ];
   languages.python.enable = true;
   #languages.python.venv.enable = true;
