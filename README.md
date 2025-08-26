@@ -1,7 +1,5 @@
 # match-bot
 
-# Under development do not use
-
 ## Current status:
 
 - [x] Database
